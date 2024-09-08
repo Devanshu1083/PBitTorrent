@@ -7,6 +7,7 @@ import struct
 import os
 
 
+# Decoding bencoded data
 def decode_int(bencoded_value):
     if chr(bencoded_value[0]) != "i":
         raise ValueError("Not an integer")
@@ -62,6 +63,55 @@ def decode_bencode(bencoded_value):
         raise NotImplementedError(
             f"We only support strings, integers, lists, and dicts."
         )
+#################### Decoding end ##################################
+
+    
+# Encoding data in bencode format
+def bencode_bytes(value):
+    length = len(value)
+    return str(length).encode() + b":" + value
+
+
+def bencode_int(value):
+    return ("i" + str(value) + "e").encode()
+
+def bencode_string(value):
+    length = len(value)
+    return (str(length) + ":" + value).encode()
+
+def bencode_dict(value):
+    result = b"d"
+    for k in value:
+        result += bencode(k) + bencode(value[k])
+    return result + b"e"
+
+def bencode_list(value):
+    result = b"l"
+    for i in value:
+        result += bencode(i)
+    return result + b"e"
+
+def bencode(value):
+    if isinstance(value, str):
+        return bencode_string(value)
+    elif isinstance(value, bytes):
+        return bencode_bytes(value)
+    elif isinstance(value, int):
+        return bencode_int(value)
+    elif isinstance(value, list):
+        return bencode_list(value)
+    elif isinstance(value, dict):
+        return bencode_dict(value)
+    else:
+        raise ValueError("Can only bencode strings, ints, lists, or dicts.")
+
+#################### Encoding end ##################################
+
+def pieces_hash_list(pieces):
+    n = 20
+    if len(pieces) % n != 0:
+        raise ValueError("Piece hashes do not add up to a multiple of", n, "bytes.")
+    return [pieces[i : i + n] for i in range(0, len(pieces), n)]
 
 # printing the torrent file info by passing and using bencode decode
 # Note that the file is in binary format so use bytes
@@ -73,6 +123,16 @@ def get_torrentinfo(filename):
             raise ValueError("Undecoded remainder.")
         print("Tracker URL:", decoded_value["announce"].decode())
         print("Length:", decoded_value["info"]["length"])
+
+        # info hash 
+        info_hash = hashlib.sha1(bencode(decoded_value["info"])).hexdigest()
+        print("Info Hash:", info_hash)
+
+        print("Piece Length:", decoded_value["info"]["piece length"])
+        print("Pieces Hash:")
+        hashes = pieces_hash_list(decoded_value["info"]["pieces"])
+        for h in hashes:
+            print(h.hex())
 
 
 def main():
